@@ -1,8 +1,8 @@
-name: Deploy Docs
+name: Deploy static content to Pages
 
 on:
   push:
-    branches: [main]
+    branches: ["master"]
     paths: ['docs/**']
   workflow_dispatch:
 
@@ -16,10 +16,14 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build-and-deploy:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Generate sidebar
         run: bash scripts/generate-sidebar.sh
@@ -30,9 +34,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add docs/_sidebar.md
           git diff --cached --quiet || git commit -m "docs: auto-update sidebar"
-
-      - name: Push sidebar update
-        run: git push
+          git push
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
@@ -40,8 +42,8 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: docs
+          path: 'docs'
 
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
