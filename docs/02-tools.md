@@ -262,7 +262,6 @@ buildTool(ToolDef) → Tool 对象 → isEnabled() → validateInput() → check
 
 **关键导出函数**:
 - `isSearchOrReadBashCommand()` — 判断命令是否为搜索/读取操作（用于 UI 折叠）
-- `isSilentBashCommand()` — 判断命令是否为静默命令（成功时无输出）
 
 ---
 
@@ -289,7 +288,6 @@ buildTool(ToolDef) → Tool 对象 → isEnabled() → validateInput() → check
 
 **关键导出函数**:
 - `detectBlockedSleepPattern()` — 检测阻塞式 sleep 命令
-- `isSearchOrReadPowerShellCommand()` — 判断是否为搜索/读取操作
 
 ---
 
@@ -440,9 +438,9 @@ buildTool(ToolDef) → Tool 对象 → isEnabled() → validateInput() → check
 3. 执行 `cleanupWorktree()` 或 `keepWorktree()`
 4. 调用 `restoreSessionToOriginalCwd()` 恢复会话状态
 
-**辅助函数**:
-- `countWorktreeChanges()` — 统计未提交文件数和提交数（fail-closed 策略）
-- `restoreSessionToOriginalCwd()` — 恢复 CWD、projectRoot、hooks 快照等
+**辅助函数** (私有):
+- `countWorktreeChanges()` — 统计未提交文件数和提交数（fail-closed 策略，内部使用）
+- `restoreSessionToOriginalCwd()` — 恢复 CWD、projectRoot、hooks 快照等（内部使用）
 
 ---
 
@@ -480,7 +478,7 @@ buildTool(ToolDef) → Tool 对象 → isEnabled() → validateInput() → check
 
 **用途**: 列出已连接 MCP 服务器提供的资源。
 
-- **name**: `ListMcpResources`
+- **name**: `ListMcpResourcesTool`
 - **文件**: `ListMcpResourcesTool/ListMcpResourcesTool.ts`
 - **isReadOnly**: `true`
 - **shouldDefer**: `true`
@@ -731,6 +729,7 @@ buildTool(ToolDef) → Tool 对象 → isEnabled() → validateInput() → check
 **用途**: 在团队成员间发送消息（点对点、广播、结构化消息）。
 
 - **name**: `SendMessage`
+- **shouldDefer**: `true`
 
 **inputSchema 主要字段**:
 | 字段 | 类型 | 说明 |
@@ -806,12 +805,11 @@ buildTool(ToolDef) → Tool 对象 → isEnabled() → validateInput() → check
 
 ## 计划调度工具
 
-### ScheduleCronTool (CronCreateTool / CronListTool / CronDeleteTool)
+### CronCreateTool
 
-**用途**: 管理定时任务（cron jobs）。
+**用途**: 创建定时任务（cron jobs）。
 
-**CronCreateTool**:
-- **name**: `ScheduleCron`
+- **name**: `CronCreate`
 - **isEnabled**: `isKairosCronEnabled()`
 - **shouldDefer**: `true`
 
@@ -822,8 +820,13 @@ buildTool(ToolDef) → Tool 对象 → isEnabled() → validateInput() → check
 | `recurring` | `boolean` | 是否循环（默认 true） |
 | `durable` | `boolean` | 是否持久化到磁盘（默认 false） |
 
-**CronListTool** — 列出所有定时任务
-**CronDeleteTool** — 删除定时任务
+### CronListTool
+
+**用途**: 列出所有定时任务。
+
+### CronDeleteTool
+
+**用途**: 删除定时任务。
 
 ---
 
@@ -917,9 +920,11 @@ buildTool(ToolDef) → Tool 对象 → isEnabled() → validateInput() → check
 4. 描述缓存（`getToolDescriptionMemoized`），LRU 失效策略
 
 **辅助函数**:
-- `parseToolName()` — 将工具名解析为可搜索的部分
-- `compileTermPatterns()` — 预编译搜索项正则
 - `clearToolSearchDescriptionCache()` — 清除描述缓存
+
+**内部 helper 函数**:
+- `parseToolName()` — 将工具名解析为可搜索的部分（内部使用，非导出）
+- `compileTermPatterns()` — 预编译搜索项正则（内部使用，非导出）
 
 ---
 
@@ -997,9 +1002,11 @@ buildTool(ToolDef) → Tool 对象 → isEnabled() → validateInput() → check
 
 **用途**: 共享的 teammate 创建模块，被 AgentTool 和 TeammateTool 复用。
 
-**关键函数**:
+**关键导出函数**:
 - `resolveTeammateModel()` — 解析 teammate 模型值（支持 `inherit` 别名）
-- `getDefaultTeammateModel()` — 获取默认 teammate 模型
+
+**内部函数**:
+- `getDefaultTeammateModel()` — 获取默认 teammate 模型（私有，仅供内部使用）
 
 ---
 
@@ -1024,9 +1031,9 @@ buildTool(ToolDef) → Tool 对象 → isEnabled() → validateInput() → check
 | BashTool | `Bash` | 动态 | ✗ | - | `BashTool/BashTool.tsx` |
 | BriefTool | `Brief` | ✓ | ✓ | - | `BriefTool/BriefTool.ts` |
 | ConfigTool | `Config` | 动态 | ✓ | ✓ | `ConfigTool/ConfigTool.ts` |
-| CronCreateTool | `ScheduleCron` | - | - | ✓ | `ScheduleCronTool/CronCreateTool.ts` |
-| CronListTool | `ListScheduledCrons` | ✓ | - | ✓ | `ScheduleCronTool/CronListTool.ts` |
-| CronDeleteTool | `DeleteScheduledCron` | - | - | ✓ | `ScheduleCronTool/CronDeleteTool.ts` |
+| CronCreateTool | `CronCreate` | - | - | ✓ | `ScheduleCronTool/CronCreateTool.ts` |
+| CronListTool | `CronList` | ✓ | - | ✓ | `ScheduleCronTool/CronListTool.ts` |
+| CronDeleteTool | `CronDelete` | - | - | ✓ | `ScheduleCronTool/CronDeleteTool.ts` |
 | EnterPlanModeTool | `EnterPlanMode` | ✓ | ✓ | ✓ | `EnterPlanModeTool/EnterPlanModeTool.ts` |
 | EnterWorktreeTool | `EnterWorktree` | - | - | ✓ | `EnterWorktreeTool/EnterWorktreeTool.ts` |
 | ExitPlanModeTool | `ExitPlanMode` | - | - | - | `ExitPlanModeTool/ExitPlanModeV2Tool.ts` |
@@ -1036,7 +1043,7 @@ buildTool(ToolDef) → Tool 对象 → isEnabled() → validateInput() → check
 | FileWriteTool | `Write` | ✗ | - | - | `FileWriteTool/FileWriteTool.ts` |
 | GlobTool | `Glob` | ✓ | ✓ | - | `GlobTool/GlobTool.ts` |
 | GrepTool | `Grep` | ✓ | ✓ | - | `GrepTool/GrepTool.ts` |
-| ListMcpResourcesTool | `ListMcpResources` | ✓ | ✓ | ✓ | `ListMcpResourcesTool/ListMcpResourcesTool.ts` |
+| ListMcpResourcesTool | `ListMcpResourcesTool` | ✓ | ✓ | ✓ | `ListMcpResourcesTool/ListMcpResourcesTool.ts` |
 | LSPTool | `LSP` | ✓ | ✓ | ✓ | `LSPTool/LSPTool.ts` |
 | MCPTool | `mcp` (动态) | - | - | - | `MCPTool/MCPTool.ts` |
 | McpAuthTool | `mcp__<server>__authenticate` | - | - | - | `McpAuthTool/McpAuthTool.ts` |
@@ -1044,7 +1051,7 @@ buildTool(ToolDef) → Tool 对象 → isEnabled() → validateInput() → check
 | PowerShellTool | `PowerShell` | 动态 | ✗ | - | `PowerShellTool/PowerShellTool.tsx` |
 | ReadMcpResourceTool | `ReadMcpResourceTool` | ✓ | ✓ | ✓ | `ReadMcpResourceTool/ReadMcpResourceTool.ts` |
 | RemoteTriggerTool | `RemoteTrigger` | 动态 | ✓ | ✓ | `RemoteTriggerTool/RemoteTriggerTool.ts` |
-| SendMessageTool | `SendMessage` | - | - | - | `SendMessageTool/SendMessageTool.ts` |
+| SendMessageTool | `SendMessage` | - | - | ✓ | `SendMessageTool/SendMessageTool.ts` |
 | SkillTool | `Skill` | - | - | - | `SkillTool/SkillTool.ts` |
 | SleepTool | `Sleep` | ✓ | ✓ | - | `SleepTool/` (prompt only) |
 | SyntheticOutputTool | `StructuredOutput` | ✓ | ✓ | - | `SyntheticOutputTool/SyntheticOutputTool.ts` |

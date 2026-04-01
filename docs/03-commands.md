@@ -74,7 +74,7 @@ Claude Code 的命令系统支持用户通过 `/command-name` 斜杠命令在交
 |------|-----|
 | **类型** | `prompt` |
 | **描述** | 审查 Pull Request |
-| **参数** | `[PR 编号]` |
+| **参数** | `[PR 编号或空]` |
 | **非交互** | 不适用（prompt 类型） |
 | **来源** | `commands/review.ts` |
 
@@ -87,7 +87,7 @@ Claude Code 的命令系统支持用户通过 `/command-name` 斜杠命令在交
 | 属性 | 值 |
 |------|-----|
 | **类型** | `local-jsx` |
-| **描述** | ~10-20 分钟深度 bug 发现与验证，在 Claude Code on the web 中运行 |
+| **描述** | Finds and verifies bugs in your branch. Runs in Claude Code on the web. |
 | **来源** | `commands/review.ts` → `review/ultrareviewCommand.tsx` |
 | **启用条件** | `isUltrareviewEnabled()` |
 
@@ -102,7 +102,7 @@ Claude Code 的命令系统支持用户通过 `/command-name` 斜杠命令在交
 | **类型** | `prompt`（已迁移至 plugin） |
 | **描述** | 对当前分支的待提交变更执行安全审查 |
 | **来源** | `commands/security-review.ts` |
-| **工具权限** | `Bash(git diff/status/log/show:*)`、`Read`、`Glob`、`Grep`、`LS`、`Task` |
+| **工具权限** | `Bash(git diff:*)`、`Bash(git status:*)`、`Bash(git log:*)`、`Bash(git show:*)`、`Bash(git remote show:*)`、`Read`、`Glob`、`Grep`、`LS`、`Task` |
 
 **核心功能**：作为高级安全工程师执行聚焦安全审查。分三阶段进行：仓库上下文研究、对比分析、漏洞评估。仅报告高置信度（>80%）的可利用漏洞，并排除 DoS、磁盘密钥存储、速率限制等低影响发现。
 
@@ -954,10 +954,8 @@ Claude Code 的命令系统支持用户通过 `/command-name` 斜杠命令在交
 
 | 属性 | 值 |
 |------|-----|
-| **类型** | `local`（非斜杠命令，内部使用） |
-| **描述** | 使用 Opus 模型分析历史会话并生成使用洞察报告 |
-| **启用条件** | `USER_TYPE === 'ant'` |
-| **非交互** | 支持 |
+| **类型** | `prompt` |
+| **描述** | Generate a report analyzing your Claude Code sessions |
 | **来源** | `commands/insights.ts` |
 
 **核心功能**：收集所有历史会话数据（包括远程 homespace），使用 AI 模型进行多维分析。包括项目领域分析、交互风格描述、成功工作流识别、摩擦分析、改进建议和未来机会。生成 6-8 个并行的洞察部分。支持 facet 缓存和增量更新。
@@ -1056,7 +1054,7 @@ Claude Code 的命令系统支持用户通过 `/command-name` 斜杠命令在交
 | **类型** | `local-jsx` |
 | **描述** | Claude in Chrome (Beta) 设置 |
 | **可用性** | `claude-ai` |
-| **启用条件** | 非非交互会话 |
+| **启用条件** | 非交互会话 |
 | **来源** | `commands/chrome/index.ts` |
 
 **核心功能**：管理 Chrome 浏览器扩展的 Claude 集成设置。
@@ -1178,7 +1176,7 @@ Claude Code 的命令系统支持用户通过 `/command-name` 斜杠命令在交
 
 | 属性 | 值 |
 |------|-----|
-| **类型** | 工厂函数 |
+| **类型** | 工厂函数（特殊类型，用于生成命令兼容层，非直接可调用命令） |
 | **描述** | 创建已迁移至插件的命令的兼容层 |
 | **来源** | `commands/createMovedToPluginCommand.ts` |
 

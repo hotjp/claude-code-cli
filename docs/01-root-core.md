@@ -268,7 +268,12 @@ type Tool<
   checkPermissions(input, context): Promise<PermissionResult>
   getPath?(input): string
   preparePermissionMatcher?(input): Promise<(pattern: string) => boolean>
-  prompt(options): Promise<string>
+  prompt(options: {
+    getToolPermissionContext: () => Promise<ToolPermissionContext>
+    tools: Tools
+    agents: AgentDefinition[]
+    allowedAgentTypes?: string[]
+  }): Promise<string>
   userFacingName(input): string
   userFacingNameBackgroundColor?(input): keyof Theme | undefined
   isTransparentWrapper?(): boolean
@@ -276,15 +281,59 @@ type Tool<
   getActivityDescription?(input): string | null
   toAutoClassifierInput(input): unknown
   mapToolResultToToolResultBlockParam(content, toolUseID): ToolResultBlockParam
-  renderToolResultMessage?(content, progressMessages, options): React.ReactNode
+  renderToolResultMessage?(
+    content: Output,
+    progressMessagesForMessage: ProgressMessage<P>[],
+    options: {
+      style?: 'condensed'
+      theme: ThemeName
+      tools: Tools
+      verbose: boolean
+      isTranscriptMode?: boolean
+      isBriefOnly?: boolean
+      input?: unknown
+    }
+  ): React.ReactNode
   extractSearchText?(out: Output): string
-  renderToolUseMessage(input, options): React.ReactNode
+  renderToolUseMessage(
+    input: Partial<z.infer<Input>>,
+    options: { theme: ThemeName; verbose: boolean; commands?: Command[] }
+  ): React.ReactNode
   isResultTruncated?(output: Output): boolean
-  renderToolUseTag?(input): React.ReactNode
-  renderToolUseProgressMessage?(progressMessages, options): React.ReactNode
+  renderToolUseTag?(input: Partial<z.infer<Input>>): React.ReactNode
+  renderToolUseProgressMessage?(
+    progressMessagesForMessage: ProgressMessage<P>[],
+    options: {
+      tools: Tools
+      verbose: boolean
+      terminalSize?: { columns: number; rows: number }
+      inProgressToolCallCount?: number
+      isTranscriptMode?: boolean
+    },
+  ): React.ReactNode
   renderToolUseQueuedMessage?(): React.ReactNode
-  renderToolUseRejectedMessage?(input, options): React.ReactNode
-  renderToolUseErrorMessage?(result, options): React.ReactNode
+  renderToolUseRejectedMessage?(
+    input: z.infer<Input>,
+    options: {
+      columns: number
+      messages: Message[]
+      style?: 'condensed'
+      theme: ThemeName
+      tools: Tools
+      verbose: boolean
+      progressMessagesForMessage: ProgressMessage<P>[]
+      isTranscriptMode?: boolean
+    },
+  ): React.ReactNode
+  renderToolUseErrorMessage?(
+    result: ToolResultBlockParam['content'],
+    options: {
+      progressMessagesForMessage: ProgressMessage<P>[]
+      tools: Tools
+      verbose: boolean
+      isTranscriptMode?: boolean
+    },
+  ): React.ReactNode
   renderGroupedToolUse?(toolUses, options): React.ReactNode | null
 }
 ```
@@ -377,7 +426,7 @@ function buildTool<D extends AnyToolDef>(def: D): BuiltTool<D>
 | `isDestructive` | `() => false` |
 | `checkPermissions` | 始终允许（交由通用权限系统处理） |
 | `toAutoClassifierInput` | 返回 `''`（跳过分类器） |
-| `userFacingName` | 返回工具的 `name` |
+| `userFacingName` | 返回空字符串`''`，由`buildTool`覆盖为返回`def.name` |
 
 ```typescript
 const myTool = buildTool({
@@ -462,7 +511,15 @@ function getAllBaseTools(): Tools
 - `isToolSearchEnabledOptimistic()`：按需包含 ToolSearchTool
 - `hasEmbeddedSearchTools()`：嵌入式搜索时移除 Glob/Grep 独立工具
 
-核心工具列表包括：`AgentTool`, `BashTool`, `FileReadTool`, `FileEditTool`, `FileWriteTool`, `GlobTool`, `GrepTool`, `WebFetchTool`, `WebSearchTool`, `TodoWriteTool`, `AskUserQuestionTool`, `SkillTool` 等。
+核心工具列表包括：`AgentTool`, `BashTool`, `FileReadTool`, `FileEditTool`, `FileWriteTool`, `GlobTool`, `GrepTool`, `WebFetchTool`, `WebSearchTool`, `TodoWriteTool`, `AskUserQuestionTool`, `SkillTool`, `TaskOutputTool`, `NotebookEditTool`, `ExitPlanModeV2Tool`, `TaskStopTool`, `EnterPlanModeTool`, `EnterWorktreeTool` 等。
+
+条件编译工具（按环境启用）：
+- `ListPeersTool`（`UDS_INBOX`）
+- `SnipTool`（`HISTORY_SNIP`）
+- `WebBrowserTool`（`ant` 用户）
+- `VerifyPlanExecutionTool`（`CLAUDE_CODE_VERIFY_PLAN`）
+- `getSendMessageTool()`, `getTeamCreateTool()`, `getTeamDeleteTool()`（`isAgentSwarmsEnabled()`）
+- `TestingPermissionTool`（`NODE_ENV === 'test'`）
 
 #### `filterToolsByDenyRules()`
 
@@ -706,7 +763,7 @@ function getSystemPromptInjection(): string | null
 function setSystemPromptInjection(value: string | null): void
 ```
 
-获取/设置系统提示注入内容（用于缓存破坏，仅内部构建）。
+获取/设置系统提示注入内容（用于缓存破坏）。
 
 设置时自动清除 `getUserContext` 和 `getSystemContext` 的缓存。
 
@@ -1051,47 +1108,29 @@ for await (const event of query({
 2. **MDM 预读取**：`startMdmRawRead()` 启动 MDM 配置子进程
 3. **Keychain 预读取**：`startKeychainPrefetch()` 并行读取 macOS 钥匙串
 
-### 调试检测
+### 调试检测（内部）
 
-```typescript
-function isBeingDebugged(): boolean
-```
+`isBeingDebugged()` — 检测进程是否被调试器附加（Node.js `--inspect`/`--debug`、`inspector.url()`）。外部构建中检测到调试器会直接退出。
 
-检测进程是否被调试器附加（Node.js `--inspect`/`--debug`、`inspector.url()`）。外部构建中检测到调试器会直接退出。
+### 辅助函数（内部）
 
-### 辅助函数
+`logManagedSettings()` — 记录托管设置键到 Statsig 遥测。
 
-#### `logManagedSettings()`
+`logSessionTelemetry()` — 记录会话级别的 skill/plugin 遥测。
 
-```typescript
-function logManagedSettings(): void
-```
+`logStartupTelemetry()` — 记录启动遥测：git 状态、worktree 数量、gh 认证状态、沙箱配置等。
 
-记录托管设置键到 Statsig 遥测。
+`runMigrations()` — 运行所有同步迁移（版本号 `CURRENT_MIGRATION_VERSION = 11`）。包括模型重命名、设置迁移等。
 
-#### `logSessionTelemetry()`
+`prefetchSystemContextIfSafe()` — 仅在安全环境下预取系统上下文（信任已确认或非交互模式）。
 
-```typescript
-function logSessionTelemetry(): void
-```
+`loadSettingsFromFlag()` — 解析 `--settings` 标志，支持 JSON 字符串或文件路径。使用内容哈希路径避免破坏 prompt cache。
 
-记录会话级别的 skill/plugin 遥测。
+`eagerLoadSettings()` — 在 `init()` 之前解析 `--settings` 和 `--setting-sources` 标志。
 
-#### `logStartupTelemetry()`
+`initializeEntrypoint()` — 根据运行模式设置 `CLAUDE_CODE_ENTRYPOINT` 环境变量（`cli`/`sdk-cli`/`mcp`/`claude-code-github-action`）。
 
-```typescript
-async function logStartupTelemetry(): Promise<void>
-```
-
-记录启动遥测：git 状态、worktree 数量、gh 认证状态、沙箱配置等。
-
-#### `runMigrations()`
-
-```typescript
-function runMigrations(): void
-```
-
-运行所有同步迁移（版本号 `CURRENT_MIGRATION_VERSION = 11`）。包括模型重命名、设置迁移等。
+### 导出函数
 
 #### `startDeferredPrefetches()`
 
@@ -1101,39 +1140,7 @@ export function startDeferredPrefetches(): void
 
 在 REPL 首次渲染后启动后台预取：用户信息、CLAUDE.md、tips、文件计数、feature flag、模型能力等。`--bare` 模式下完全跳过。
 
-#### `prefetchSystemContextIfSafe()`
-
-```typescript
-function prefetchSystemContextIfSafe(): void
-```
-
-仅在安全环境下预取系统上下文（信任已确认或非交互模式）。
-
-#### `loadSettingsFromFlag()`
-
-```typescript
-function loadSettingsFromFlag(settingsFile: string): void
-```
-
-解析 `--settings` 标志，支持 JSON 字符串或文件路径。使用内容哈希路径避免破坏 prompt cache。
-
-#### `eagerLoadSettings()`
-
-```typescript
-function eagerLoadSettings(): void
-```
-
-在 `init()` 之前解析 `--settings` 和 `--setting-sources` 标志。
-
-#### `initializeEntrypoint()`
-
-```typescript
-function initializeEntrypoint(isNonInteractive: boolean): void
-```
-
-根据运行模式设置 `CLAUDE_CODE_ENTRYPOINT` 环境变量（`cli`/`sdk-cli`/`mcp`/`claude-code-github-action`）。
-
-### 核心函数
+### 核心函数（内部）
 
 #### `main()`
 
@@ -1152,54 +1159,20 @@ CLI 主入口函数。执行流程：
 7. **设置预加载**：`eagerLoadSettings()`
 8. **委托给 `run()`**
 
-#### `getInputPrompt()`
+`getInputPrompt()` — 处理 stdin 输入。非 TTY 时从 stdin 读取数据（3s 超时），`stream-json` 模式返回 AsyncIterable。
 
-```typescript
-async function getInputPrompt(
-  prompt: string,
-  inputFormat: 'text' | 'stream-json',
-): Promise<string | AsyncIterable<string>>
-```
-
-处理 stdin 输入。非 TTY 时从 stdin 读取数据（3s 超时），`stream-json` 模式返回 AsyncIterable。
-
-#### `run()`
-
-```typescript
-async function run(): Promise<CommanderCommand>
-```
-
-配置 Commander.js 命令解析器。核心结构：
-
+`run()` — 配置 Commander.js 命令解析器。核心结构：
 - **preAction hook**：MDM/keychain 等待、`init()`、日志初始化、迁移、远程设置加载
 - **默认命令**：启动 REPL 或 headless 模式
 - **子命令**：`mcp`、`plugin`、`doctor` 等
 
-### 待处理类型
+### 待处理类型（内部）
 
-```typescript
-type PendingConnect = {
-  url: string | undefined
-  authToken: string | undefined
-  dangerouslySkipPermissions: boolean
-}
+`PendingConnect` — 暂存 SSH/Assistant 模式的连接参数。
 
-type PendingAssistantChat = {
-  sessionId?: string
-  discover: boolean
-}
+`PendingAssistantChat` — 暂存 Assistant 聊天会话参数。
 
-type PendingSSH = {
-  host: string | undefined
-  cwd: string | undefined
-  permissionMode: string | undefined
-  dangerouslySkipPermissions: boolean
-  local: boolean
-  extraCliArgs: string[]
-}
-```
-
-这些类型暂存从 argv 中提取的特殊模式参数，供后续 REPL 分支使用。
+`PendingSSH` — 暂存 SSH 连接参数。
 
 ---
 
@@ -1412,7 +1385,7 @@ await shellTask?.kill(taskId, setAppState)
 
 `cost-tracker.ts` 管理会话级别的费用统计、token 使用量、模型用量等。
 
-### 导出重导出
+### 导出函数
 
 从 `bootstrap/state.js` 重导出：
 
@@ -1430,7 +1403,6 @@ export {
   getTotalCacheReadInputTokens,    // 总缓存读取 token
   getTotalCacheCreationInputTokens, // 总缓存创建 token
   getTotalWebSearchRequests,        // 总 Web 搜索请求
-  formatCost,
   hasUnknownModelCost,
   resetStateForTests,
   resetCostState,
@@ -1440,7 +1412,15 @@ export {
 } from './bootstrap/state.js'
 ```
 
-### 内部类型
+### 导出函数（cost-tracker.ts 本地）
+
+```typescript
+function formatCost(): string
+```
+
+本地格式化函数，用于生成费用报告字符串。
+
+### 导出类型
 
 #### `StoredCostState`
 
@@ -1499,7 +1479,7 @@ function formatTotalCost(): string
 
 格式化总费用报告字符串。包含：
 
-```
+```text
 Total cost:            $0.1234
 Total duration (API):  1m 23s
 Total duration (wall): 2m 45s
