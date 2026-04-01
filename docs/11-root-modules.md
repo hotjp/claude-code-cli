@@ -324,7 +324,7 @@ export async function showSetupScreens(
 
 **核心流程**:
 
-1. **跳过条件**：测试环境（`"production" === 'test'`）、`IS_DEMO` 模式直接返回 false
+1. **跳过条件**：满足以下任一条件时直接返回 false：`"production" === 'test'`（测试环境）、`isEnvTruthy(false)`、`IS_DEMO` 模式
 2. **首次引导**：若无主题设置或未完成引导，显示 `Onboarding` 对话框，标记 `onboardingShown = true`
 3. **信任对话框**（非 `CLAUBBIT` 环境）：若 `checkHasTrustDialogAccepted()` 返回 false，显示 `TrustDialog`
    - 验证后调用 `setSessionTrustAccepted(true)` 并重置 GrowthBook
@@ -524,10 +524,12 @@ export function maybeMarkProjectOnboardingComplete(): void
 判断是否应显示项目引导提示（带记忆化）。
 
 ```typescript
-export const shouldShowProjectOnboarding = memoize((): boolean => {
-  const projectConfig = getCurrentProjectConfig()
-  // ...
-})
+export const shouldShowProjectOnboarding = memoize(
+  (): boolean => {
+    const projectConfig = getCurrentProjectConfig()
+    // ...
+  }
+)
 ```
 
 **返回**: `boolean` - 是否应显示引导（已 memoized）
